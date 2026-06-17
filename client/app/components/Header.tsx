@@ -39,6 +39,11 @@ const Header = () => {
               Swap Token
             </a>
           </Link>
+          <Link href="/dashboard" legacyBehavior>
+            <a className="text-gery-300 text-xl mr-2 hover:underline">
+              Dashboard
+            </a>
+          </Link>
         </div>
       </header>
     </>

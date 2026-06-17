@@ -1,6 +1,8 @@
 const {
     Keypair,
     SorobanRpc,
+    Horizon,
+    StrKey,
     TransactionBuilder,
     Asset,
     Operation,
@@ -158,5 +160,38 @@ exports.swapTokens = async (req, res) => {
         res.json({ message: 'Swap successful', transactionHash: result});
     } catch (error) {
         res.status(500).json({ error: `Error performing swap: ${error.message}` });
+    }
+};
+
+exports.getAccountInfo = async (req, res) => {
+    const { publicKey } = req.params;
+
+    if (!StrKey.isValidEd25519PublicKey(publicKey)) {
+        return res.status(400).json({ error: 'Invalid public key format' });
+    }
+
+    const server = new Horizon.Server(process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org');
+
+    try {
+        const account = await server.loadAccount(publicKey);
+
+        const balances = account.balances.map(b => ({
+            assetType: b.asset_type,
+            assetCode: b.asset_type === 'native' ? 'XLM' : b.asset_code,
+            issuer: b.asset_issuer || null,
+            balance: b.balance,
+            liquidityPoolId: b.liquidity_pool_id || null,
+        }));
+
+        res.json({
+            publicKey: account.id,
+            sequenceNumber: account.sequence,
+            balances,
+        });
+    } catch (error) {
+        if (error?.response?.status === 404) {
+            return res.status(404).json({ error: 'Account not found. It may not be funded yet.' });
+        }
+        res.status(500).json({ error: 'Failed to fetch account info' });
     }
 };

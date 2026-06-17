@@ -17,5 +17,6 @@ router
     .post("/deposit-tokens",tokenController.depositTokens)
     .post("/withdraw-tokens",tokenController.withdrawTokens)
     .post("/swap-tokens",tokenController.swapTokens)
+    .get('/account-info/:publicKey', tokenController.getAccountInfo)
 
 module.exports = router;
