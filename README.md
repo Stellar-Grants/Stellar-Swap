@@ -18,13 +18,19 @@ Ensure Node.js is installed, then run:
 npm install
 ```
 
-### 3. Run Backend Scripts
+### 3. Configure Environment Variables
+Copy the example env file and edit as needed:
+```bash
+cp server/.env.example server/.env
+```
+
+### 4. Run Backend Scripts
 Execute the script to perform the transactions:
 ```bash
 node server/index.js
 ```
 
-### 4. Run Frontend
+### 5. Run Frontend
 To start the web interface, execute the following commands:
 ```bash
 cd client
