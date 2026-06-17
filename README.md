@@ -21,7 +21,7 @@ npm install
 ### 3. Run Backend Scripts
 Execute the script to perform the transactions:
 ```bash
-node server/app.js
+node server/index.js
 ```
 
 ### 4. Run Frontend
