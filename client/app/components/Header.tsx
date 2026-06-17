@@ -24,18 +24,18 @@ const Header = () => {
 
         <div className="flex items-center gap-4 ml-auto md:flex md:gap-8">
         <Link href="/create-wallet" legacyBehavior>
-            <a className="text-gery-300 text-xl hover:underline">Create Wallet</a>
+            <a className="text-gray-300 text-xl hover:underline">Create Wallet</a>
           </Link>
           <Link href="/deposit-tokens" legacyBehavior>
-            <a className="text-gery-300 text-xl hover:underline">Add Liquidity</a>
+            <a className="text-gray-300 text-xl hover:underline">Add Liquidity</a>
           </Link>
           <Link href="/withdraw-tokens" legacyBehavior>
-            <a className="text-gery-300 text-xl mr-2 hover:underline">
+            <a className="text-gray-300 text-xl mr-2 hover:underline">
               Withdraw Token
             </a>
           </Link>
           <Link href="/swap-tokens" legacyBehavior>
-            <a className="text-gery-300 text-xl mr-2 hover:underline">
+            <a className="text-gray-300 text-xl mr-2 hover:underline">
               Swap Token
             </a>
           </Link>
