@@ -26,15 +26,15 @@ const Header = () => {
             <a className="text-gery-300 text-xl hover:underline">Create Wallet</a>
           </Link>
           <Link href="/deposit-tokens" legacyBehavior>
-            <a className="text-gery-300 text-xl hover:underline">Add Liquidity</a>
+            <a className="text-gray-300 text-xl hover:underline">Add Liquidity</a>
           </Link>
           <Link href="/withdraw-tokens" legacyBehavior>
-            <a className="text-gery-300 text-xl mr-2 hover:underline">
+            <a className="text-gray-300 text-xl mr-2 hover:underline">
               Withdraw Token
             </a>
           </Link>
           <Link href="/swap-tokens" legacyBehavior>
-            <a className="text-gery-300 text-xl mr-2 hover:underline">
+            <a className="text-gray-300 text-xl mr-2 hover:underline">
               Swap Token
             </a>
           </Link>
