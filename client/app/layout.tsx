@@ -1,11 +1,6 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import { headers } from "next/headers";
-import { Inter } from "next/font/google";
 import { Toaster } from "react-hot-toast";
-
-
-const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Nexus Swap",
@@ -21,7 +16,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-      <main>{children}</main>
+        <main>{children}</main>
         <Toaster position="top-right" reverseOrder={false} />
       </body>
     </html>
