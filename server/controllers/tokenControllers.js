@@ -1,7 +1,7 @@
 const {
     Keypair,
-    SorobanRpc,
     Horizon,
+    SorobanRpc,
     StrKey,
     TransactionBuilder,
     Asset,
@@ -55,6 +55,108 @@ exports.fundAccount = async (req, res) => {
         res.json({ message: `Account ${publicKey} successfully funded.` });
     } else {
         res.status(500).json({ error: `Failed to fund account ${publicKey}.` });
+    }
+};
+
+function parseHistoryLimit(limit) {
+    const parsedLimit = parseInt(limit, 10);
+
+    if (Number.isNaN(parsedLimit)) {
+        return 20;
+    }
+
+    return Math.min(Math.max(parsedLimit, 1), 100);
+}
+
+function formatAsset(assetType, assetCode) {
+    return assetType === 'native' ? 'XLM' : assetCode;
+}
+
+function mapOperation(op) {
+    return {
+        id: op.id,
+        type: op.type,
+        createdAt: op.created_at,
+        transactionHash: op.transaction_hash,
+        ...(op.type === 'liquidity_pool_deposit' && {
+            liquidityPoolId: op.liquidity_pool_id,
+            reservesDeposited: op.reserves_deposited,
+            sharesReceived: op.shares_received,
+        }),
+        ...(op.type === 'liquidity_pool_withdraw' && {
+            liquidityPoolId: op.liquidity_pool_id,
+            reservesReceived: op.reserves_received,
+            sharesRedeemed: op.shares,
+        }),
+        ...(op.type === 'path_payment_strict_receive' && {
+            from: op.from,
+            to: op.to,
+            sourceAsset: formatAsset(op.source_asset_type, op.source_asset_code),
+            sourceAmount: op.source_amount,
+            destAsset: formatAsset(op.asset_type, op.asset_code),
+            destAmount: op.amount,
+        }),
+        ...(op.type === 'path_payment_strict_send' && {
+            from: op.from,
+            to: op.to,
+            sourceAsset: formatAsset(op.asset_type, op.asset_code),
+            sourceAmount: op.amount,
+            destAsset: formatAsset(op.dest_asset_type, op.dest_asset_code),
+            destAmount: op.destination_amount,
+        }),
+        ...(op.type === 'change_trust' && {
+            trustor: op.trustor,
+            asset: op.asset_type === 'liquidity_pool_shares'
+                ? op.liquidity_pool_id
+                : formatAsset(op.asset_type, op.asset_code),
+            limit: op.limit,
+        }),
+        ...(op.type === 'payment' && {
+            from: op.from,
+            to: op.to,
+            asset: formatAsset(op.asset_type, op.asset_code),
+            amount: op.amount,
+        }),
+    };
+}
+
+exports.getAccountHistory = async (req, res) => {
+    const { publicKey } = req.params;
+    const { limit = 20, cursor } = req.query;
+
+    if (!StrKey.isValidEd25519PublicKey(publicKey)) {
+        return res.status(400).json({ error: 'Invalid public key format' });
+    }
+
+    const parsedLimit = parseHistoryLimit(limit);
+    const server = new Horizon.Server(process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org');
+
+    try {
+        let query = server
+            .operations()
+            .forAccount(publicKey)
+            .limit(parsedLimit)
+            .order('desc');
+
+        if (cursor) {
+            query = query.cursor(cursor);
+        }
+
+        const result = await query.call();
+        const operations = result.records.map(mapOperation);
+
+        res.json({
+            operations,
+            nextCursor: result.records.length === parsedLimit
+                ? result.records[result.records.length - 1].paging_token
+                : null,
+        });
+    } catch (error) {
+        if (error?.response?.status === 404) {
+            return res.status(404).json({ error: 'Account not found' });
+        }
+
+        res.status(500).json({ error: 'Failed to fetch transaction history' });
     }
 };
 
@@ -160,38 +262,5 @@ exports.swapTokens = async (req, res) => {
         res.json({ message: 'Swap successful', transactionHash: result});
     } catch (error) {
         res.status(500).json({ error: `Error performing swap: ${error.message}` });
-    }
-};
-
-exports.getAccountInfo = async (req, res) => {
-    const { publicKey } = req.params;
-
-    if (!StrKey.isValidEd25519PublicKey(publicKey)) {
-        return res.status(400).json({ error: 'Invalid public key format' });
-    }
-
-    const server = new Horizon.Server(process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org');
-
-    try {
-        const account = await server.loadAccount(publicKey);
-
-        const balances = account.balances.map(b => ({
-            assetType: b.asset_type,
-            assetCode: b.asset_type === 'native' ? 'XLM' : b.asset_code,
-            issuer: b.asset_issuer || null,
-            balance: b.balance,
-            liquidityPoolId: b.liquidity_pool_id || null,
-        }));
-
-        res.json({
-            publicKey: account.id,
-            sequenceNumber: account.sequence,
-            balances,
-        });
-    } catch (error) {
-        if (error?.response?.status === 404) {
-            return res.status(404).json({ error: 'Account not found. It may not be funded yet.' });
-        }
-        res.status(500).json({ error: 'Failed to fetch account info' });
     }
 };

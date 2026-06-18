@@ -31,13 +31,15 @@ function CopyButton({ data }: Props) {
         e.preventDefault();
         handleCopyClick();
       }}
+      aria-label="Copy to clipboard"
       className=""
     >
       <Image
         src={isCopied ? "/assets/tick.svg" : "/assets/copy.svg"}
         width={20}
         height={20}
-        alt="#"
+        alt=""
+        role="presentation"
       />
     </button>
   );
