@@ -1,9 +1,11 @@
 "use client";
 import React, { useState, FormEvent } from "react";
 import toast from "react-hot-toast";
+import SlippageSelector from "../SlippageSelector";
 
 const WithdrawTokens: React.FC = () => {
   const [secretKey, setSecretKey] = useState<string>("");
+  const [slippage, setSlippage] = useState<string>("1.0");
   const [liquidityPoolId, setLiquidityPoolId] = useState<string>("");
   const [amount, setAmount] = useState<string>("");
   const [txnHash, setTxnHash] = useState<string | null>(null);
@@ -13,6 +15,7 @@ const WithdrawTokens: React.FC = () => {
     const formData = {
       secretKey,
       liquidityPoolId,
+      slippage,
       amount,
     };
 
@@ -102,6 +105,7 @@ const WithdrawTokens: React.FC = () => {
                 />
               </div>
             </div>
+            <SlippageSelector value={slippage} onChange={setSlippage} />
             <button
               type="submit"
               className="w-full py-3 bg-indigo-600 text-white font-semibold rounded-md shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
