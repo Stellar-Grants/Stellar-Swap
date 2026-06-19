@@ -1,6 +1,8 @@
 "use client";
 import React, { useState, FormEvent } from "react";
 import toast from "react-hot-toast";
+import TxHashLink from "../TxHashLink";
+import LiquidityPoolLink from "../LiquidityPoolLink";
 
 const AddLiquidity: React.FC = () => {
   const [secretKey, setSecretKey] = useState<string>("");
@@ -136,7 +138,7 @@ const AddLiquidity: React.FC = () => {
               <div className="mt-4">
                 <p className="text-lg">
                   <strong>Liquidity Pool ID:</strong>
-                  <span className="block truncate text-gray-800">{lpId}</span>
+                  <LiquidityPoolLink lpId={lpId} />
                 </p>
                 <button
                   onClick={() => copyToClipboard(lpId, "Liquidity Pool ID")}
@@ -148,7 +150,7 @@ const AddLiquidity: React.FC = () => {
               <div className="mt-4">
                 <p className="text-lg">
                   <strong>Transaction Hash:</strong>
-                  <span className="block truncate text-gray-800">{txnHash}</span>
+                  <TxHashLink hash={txnHash} showHash />
                 </p>
                 <button
                   onClick={() => copyToClipboard(txnHash, "Transaction Hash")}

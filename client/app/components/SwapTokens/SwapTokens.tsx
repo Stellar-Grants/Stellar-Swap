@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, FormEvent } from "react";
 import toast from "react-hot-toast";
+import TxHashLink from "../TxHashLink";
 
 const SwapTokens: React.FC = () => {
   const [secretKey, setSecretKey] = useState<string>("");
@@ -147,7 +148,7 @@ const SwapTokens: React.FC = () => {
               </h3>
               <p className="mt-2 text-lg">
                 <strong>Transaction Hash:</strong>
-                <span className="block truncate text-gray-800">{txnHash}</span>
+                <TxHashLink hash={txnHash} showHash />
               </p>
               <button
                 onClick={() => txnHash && copyToClipboard(txnHash, "Transaction Hash")}
