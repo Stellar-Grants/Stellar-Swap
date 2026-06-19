@@ -229,6 +229,45 @@ exports.withdrawTokens = async (req, res) => {
     }
 };
 
+exports.getSwapQuote = async (req, res) => {
+    const { destAssetCode, issuerAddress, destAmount } = req.body;
+
+    const errors = [
+        destAssetCode ? null : "destAssetCode is required",
+        issuerAddress ? null : "issuerAddress is required",
+        destAmount && parseFloat(destAmount) > 0 ? null : "destAmount must be a positive number",
+    ].filter(Boolean);
+    if (errors.length) return res.status(400).json({ errors });
+
+    const server = new Horizon.Server(process.env.HORIZON_URL || "https://horizon-testnet.stellar.org");
+    const destAsset = new Asset(destAssetCode, issuerAddress);
+
+    try {
+        const paths = await server
+            .strictReceivePaths(Asset.native(), destAsset, destAmount)
+            .call();
+
+        if (!paths.records.length) {
+            return res.status(404).json({ error: "No swap route found. There may be insufficient liquidity." });
+        }
+
+        const best = paths.records.reduce((a, b) =>
+            parseFloat(a.source_amount) < parseFloat(b.source_amount) ? a : b
+        );
+
+        res.json({
+            sourceAsset: "XLM",
+            sourceAmount: best.source_amount,
+            destAsset: destAssetCode,
+            destAmount,
+            path: best.path.map((a) => a.asset_code || "XLM"),
+            exchangeRate: (parseFloat(destAmount) / parseFloat(best.source_amount)).toFixed(7),
+        });
+    } catch (error) {
+        res.status(500).json({ error: "Failed to fetch swap quote" });
+    }
+};
+
 exports.swapTokens = async (req, res) => {
     const { secretKey, destAssetCode, issuerAddress, sendMax, destAmount } = req.body;
     const server = new SorobanRpc.Server('https://soroban-testnet.stellar.org');

@@ -2,16 +2,78 @@
 import React, { useState, FormEvent } from "react";
 import toast from "react-hot-toast";
 
+interface QuoteData {
+  sourceAsset: string;
+  sourceAmount: string;
+  destAsset: string;
+  destAmount: string;
+  path: string[];
+  exchangeRate: string;
+}
+
 const SwapTokens: React.FC = () => {
   const [secretKey, setSecretKey] = useState<string>("");
   const [destAssetCode, setDestAssetCode] = useState<string>("");
   const [issuerAddress, setIssuerAddress] = useState<string>("");
-  const [sendMax, setSendMax] = useState<string>("");
   const [destAmount, setDestAmount] = useState<string>("");
   const [txnHash, setTxnHash] = useState<string | null>(null);
+  const [quote, setQuote] = useState<QuoteData | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [lastQuoteInput, setLastQuoteInput] = useState<string>("");
+
+  const getSwapQuote = async () => {
+    if (!destAssetCode || !issuerAddress || !destAmount) {
+      toast.error("Please fill in all swap fields first");
+      return;
+    }
+
+    setQuoteLoading(true);
+    setQuoteError(null);
+    setQuote(null);
+
+    try {
+      const response = await fetch("https://nexus-swap-server.vercel.app/swap-quote", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ destAssetCode, issuerAddress, destAmount }),
+      });
+
+      if (response.status === 404) {
+        setQuoteError("No swap route found. There may be insufficient liquidity.");
+        return;
+      }
+
+      if (!response.ok) {
+        const err = await response.json();
+        setQuoteError(err.error || "Failed to get quote");
+        return;
+      }
+
+      const data = await response.json();
+      setQuote(data);
+      setLastQuoteInput(destAmount);
+      toast.success("Quote received!");
+    } catch {
+      setQuoteError("Failed to fetch swap quote. Please try again.");
+    } finally {
+      setQuoteLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
+    if (!quote) {
+      toast.error("Please get a quote first");
+      return;
+    }
+
+    const slippageBuffer = 1.02;
+    const sendMax = (parseFloat(quote.sourceAmount) * slippageBuffer).toString();
+
     const formData = {
       secretKey,
       destAssetCode,
@@ -37,15 +99,15 @@ const SwapTokens: React.FC = () => {
         setSecretKey("");
         setDestAssetCode("");
         setIssuerAddress("");
-        setSendMax("");
         setDestAmount("");
+        setQuote(null);
+        setLastQuoteInput("");
       } else {
         const error = await response.json();
         toast.error(`Error during swap: ${error.error}`);
       }
-    } catch (error) {
+    } catch {
       toast.error("Error during swap");
-      console.error("Error during swap", error);
     }
   };
 
@@ -53,6 +115,8 @@ const SwapTokens: React.FC = () => {
     navigator.clipboard.writeText(text);
     toast.success(`${label} copied to clipboard!`);
   };
+
+  const inputChanged = destAmount !== lastQuoteInput;
 
   return (
     <div className="relative min-h-screen flex items-center justify-center bg-gray-200">
@@ -108,34 +172,65 @@ const SwapTokens: React.FC = () => {
               </div>
               <div>
                 <label className="block text-gray-700 text-lg font-medium mb-2">
-                  Send Max
-                </label>
-                <input
-                  type="number"
-                  value={sendMax}
-                  onChange={(e) => setSendMax(e.target.value)}
-                  className="mt-1 block w-full h-[40px] bg-gray-100 text-black rounded-md px-3 border border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  required
-                  min={0}
-                />
-              </div>
-              <div>
-                <label className="block text-gray-700 text-lg font-medium mb-2">
                   Destination Amount
                 </label>
                 <input
                   type="number"
                   value={destAmount}
-                  onChange={(e) => setDestAmount(e.target.value)}
+                  onChange={(e) => {
+                    setDestAmount(e.target.value);
+                    if (quote) setQuote(null);
+                  }}
                   className="mt-1 block w-full h-[40px] bg-gray-100 text-black rounded-md px-3 border border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   required
                   min={0}
                 />
               </div>
             </div>
+
+            <button
+              type="button"
+              onClick={getSwapQuote}
+              disabled={quoteLoading}
+              className="w-full py-3 bg-blue-500 text-white font-semibold rounded-md shadow-sm hover:bg-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+            >
+              {quoteLoading ? "Getting Quote..." : "Get Quote"}
+            </button>
+
+            {quoteError && (
+              <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+                <p className="text-red-700 text-sm">{quoteError}</p>
+              </div>
+            )}
+
+            {quote && (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+                <h4 className="font-semibold text-blue-800 mb-2">Swap Quote</h4>
+                <p className="text-sm text-blue-700">
+                  You will spend approximately{" "}
+                  <strong>{parseFloat(quote.sourceAmount).toFixed(2)} {quote.sourceAsset}</strong>{" "}
+                  to receive <strong>{quote.destAmount} {quote.destAsset}</strong>
+                </p>
+                <p className="text-sm text-blue-700 mt-1">
+                  Route: {quote.path.join(" → ")}
+                </p>
+                <p className="text-sm text-blue-700 mt-1">
+                  Exchange rate: 1 {quote.destAsset} ={" "}
+                  {(1 / parseFloat(quote.exchangeRate)).toFixed(7)} {quote.sourceAsset}
+                </p>
+              </div>
+            )}
+
+            {inputChanged && quote && (
+              <p className="text-yellow-600 text-xs text-center">
+                Amount changed — click "Get Quote" again to refresh
+              </p>
+            )}
+
             <button
               type="submit"
-              className="w-full py-3 bg-indigo-600 text-white font-semibold rounded-md shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              disabled={!quote || inputChanged}
+              className="w-full py-3 bg-indigo-600 text-white font-semibold rounded-md shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
             >
               Swap Tokens
             </button>
