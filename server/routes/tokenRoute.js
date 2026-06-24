@@ -12,7 +12,6 @@ const upload = multer({
 });
 router
     .get("/", tokenController.welcomeMsg)
-    .get("/generate-key-pair", tokenController.generateKeyPair)
     .get("/account-history/:publicKey", tokenController.getAccountHistory)
     .post("/fund-account", tokenController.fundAccount)
     .post("/deposit-tokens",tokenController.depositTokens)
