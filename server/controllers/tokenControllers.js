@@ -13,6 +13,16 @@ const {
 } = require('@stellar/stellar-sdk');
 
 
+// Parse and validate a user-provided slippage tolerance (in percent).
+// Defaults to 1.0% when not provided; returns null for invalid values
+// so callers can respond with HTTP 400.
+const parseSlippage = (raw) => {
+    const slippage = parseFloat(raw ?? '1.0');
+    if (!Number.isFinite(slippage) || slippage < 0.01 || slippage > 50) return null;
+    return slippage;
+};
+
+
 exports.welcomeMsg = async (req, res) => {
     res.status(200).json({ message: "Welcome to Nexus Swap!" });
 };
@@ -162,6 +172,18 @@ exports.getAccountHistory = async (req, res) => {
 
 exports.depositTokens = async (req, res) => {
     const { secretKey, tokenName, amountA, amountB } = req.body;
+
+    const slippage = parseSlippage(req.body.slippage);
+    if (slippage === null) {
+        return res.status(400).json({ error: 'Slippage must be a number between 0.01 and 50' });
+    }
+
+    const numA = parseFloat(amountA);
+    const numB = parseFloat(amountB);
+    if (!Number.isFinite(numA) || !Number.isFinite(numB) || numA <= 0 || numB <= 0) {
+        return res.status(400).json({ error: 'amountA and amountB must be positive numbers' });
+    }
+
     const server = new SorobanRpc.Server('https://soroban-testnet.stellar.org');
 
     try {
@@ -172,6 +194,11 @@ exports.depositTokens = async (req, res) => {
         const liquidityPoolAsset = new LiquidityPoolAsset(Asset.native(), asset, 30);
         const liquidityPoolId = getLiquidityPoolId('constant_product', liquidityPoolAsset).toString('hex');
 
+        // Bound the deposit price ratio (amountA/amountB) by the slippage tolerance.
+        const slippagePct = slippage / 100;
+        const price = numA / numB;
+        const minPrice = (price * (1 - slippagePct)).toFixed(7);
+        const maxPrice = (price * (1 + slippagePct)).toFixed(7);
 
         const depositTransaction = new TransactionBuilder(account, {
             fee: BASE_FEE,
@@ -184,8 +211,8 @@ exports.depositTokens = async (req, res) => {
                 liquidityPoolId: liquidityPoolId,
                 maxAmountA: amountA,
                 maxAmountB: amountB,
-                minPrice: { n: 1, d: 1 },
-                maxPrice: { n: 1, d: 1 }
+                minPrice: minPrice,
+                maxPrice: maxPrice
             }))
             .setTimeout(30)
             .build();
@@ -201,6 +228,12 @@ exports.depositTokens = async (req, res) => {
 
 exports.withdrawTokens = async (req, res) => {
     const { secretKey, liquidityPoolId, amount } = req.body;
+
+    const slippage = parseSlippage(req.body.slippage);
+    if (slippage === null) {
+        return res.status(400).json({ error: 'Slippage must be a number between 0.01 and 50' });
+    }
+
     const server = new SorobanRpc.Server('https://soroban-testnet.stellar.org');
 
     try {
@@ -214,6 +247,9 @@ exports.withdrawTokens = async (req, res) => {
             .addOperation(Operation.liquidityPoolWithdraw({
                 liquidityPoolId: liquidityPoolId,
                 amount: amount,
+                // minAmountA/minAmountB enforcement of the slippage tolerance is
+                // deferred to Issue #25 (requires fetching the pool reserves to
+                // compute the user's expected share).
                 minAmountA: '0',
                 minAmountB: '0'
             }))

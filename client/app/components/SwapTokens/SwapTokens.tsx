@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, FormEvent } from "react";
 import toast from "react-hot-toast";
+import SecretKeyInput from "../SecretKeyInput";
 
 const SwapTokens: React.FC = () => {
   const [secretKey, setSecretKey] = useState<string>("");
@@ -74,11 +75,9 @@ const SwapTokens: React.FC = () => {
                 <label className="block text-gray-700 text-lg font-medium mb-2">
                   Secret Key
                 </label>
-                <input
-                  type="text"
+                <SecretKeyInput
                   value={secretKey}
-                  onChange={(e) => setSecretKey(e.target.value)}
-                  className="mt-1 block w-full h-[40px] bg-gray-100 text-black rounded-md px-3 border border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  onChange={setSecretKey}
                   required
                 />
               </div>

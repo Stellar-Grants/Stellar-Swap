@@ -1,11 +1,14 @@
 "use client";
 import React, { useState, FormEvent } from "react";
 import toast from "react-hot-toast";
+import SecretKeyInput from "../SecretKeyInput";
+import SlippageSelector from "../SlippageSelector";
 
 const WithdrawTokens: React.FC = () => {
   const [secretKey, setSecretKey] = useState<string>("");
   const [liquidityPoolId, setLiquidityPoolId] = useState<string>("");
   const [amount, setAmount] = useState<string>("");
+  const [slippage, setSlippage] = useState<string>("1.0");
   const [txnHash, setTxnHash] = useState<string | null>(null);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -14,6 +17,7 @@ const WithdrawTokens: React.FC = () => {
       secretKey,
       liquidityPoolId,
       amount,
+      slippage,
     };
 
     try {
@@ -33,6 +37,7 @@ const WithdrawTokens: React.FC = () => {
         setSecretKey("");
         setLiquidityPoolId("");
         setAmount("");
+        setSlippage("1.0");
       } else {
         const error = await response.json();
         toast.error(`Error during withdrawal: ${error.error}`);
@@ -68,11 +73,9 @@ const WithdrawTokens: React.FC = () => {
                 <label className="block text-gray-700 text-lg font-medium mb-2">
                   Secret Key
                 </label>
-                <input
-                  type="text"
+                <SecretKeyInput
                   value={secretKey}
-                  onChange={(e) => setSecretKey(e.target.value)}
-                  className="mt-1 block w-full h-[40px] bg-gray-100 text-black rounded-md px-3 border border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  onChange={setSecretKey}
                   required
                 />
               </div>
@@ -102,6 +105,7 @@ const WithdrawTokens: React.FC = () => {
                 />
               </div>
             </div>
+            <SlippageSelector value={slippage} onChange={setSlippage} />
             <button
               type="submit"
               className="w-full py-3 bg-indigo-600 text-white font-semibold rounded-md shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
