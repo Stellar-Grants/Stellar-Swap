@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { toast } from "react-hot-toast";
+import { Keypair } from "@stellar/stellar-sdk";
 import CopyButton from "../CopyButton";
 
 interface WalletData {
@@ -29,25 +30,15 @@ const CreateWallet = () => {
     setWalletData((prevData) => ({ ...prevData, [attribute]: value }));
   };
 
-  const generateKeypair = async () => {
-    try {
-      setIsLoading(true);
-      const response = await fetch("https://nexus-swap-server.vercel.app/generate-key-pair", {
-        method: "GET",
-      });
-      const data = await response.json();
-      setKeypair({
-        publicKey: data.publicKey,
-        secret: data.secretKey,
-      });
-      setPublicKeyToFund(data.publicKey);
-      setIsLoading(false);
-    } catch (error) {
-      console.error("Error generating keypair:", error);
-      toast.error("Error generating keypair");
-      toast.dismiss();
-      setIsLoading(false);
-    }
+  const generateKeypair = () => {
+    // Generate the keypair entirely in the browser. The secret key is never
+    // sent over the network, so it can never be logged or intercepted server-side.
+    const keypair = Keypair.random();
+    setKeypair({
+      publicKey: keypair.publicKey(),
+      secret: keypair.secret(),
+    });
+    setPublicKeyToFund(keypair.publicKey());
   };
 
   const fundXLMTokens = async () => {
@@ -124,6 +115,12 @@ const CreateWallet = () => {
             placeholder="Enter Private Key"
           />
           <CopyButton data={keypair.secret} />
+        </div>
+
+        <div className="mb-6 rounded-md border border-yellow-400 bg-yellow-50 p-3 text-sm text-yellow-800">
+          <strong>Save your secret key now.</strong> It is generated locally in
+          your browser and never sent to any server. We cannot recover it for
+          you — anyone with this key controls the wallet.
         </div>
 
         <div className="flex flex-col md:flex-row gap-4 justify-center">
