@@ -1,6 +1,8 @@
 "use client";
 import React, { useState, FormEvent } from "react";
 import toast from "react-hot-toast";
+import TxHashLink from "../TxHashLink";
+import { liquidityPoolExplorerUrl } from "../../lib/stellarExpert";
 
 const AddLiquidity: React.FC = () => {
   const [secretKey, setSecretKey] = useState<string>("");
@@ -136,7 +138,17 @@ const AddLiquidity: React.FC = () => {
               <div className="mt-4">
                 <p className="text-lg">
                   <strong>Liquidity Pool ID:</strong>
-                  <span className="block truncate text-gray-800">{lpId}</span>
+                  <span className="mt-1 block">
+                    <a
+                      href={liquidityPoolExplorerUrl(lpId)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={lpId}
+                      className="font-mono font-semibold text-blue-700 hover:text-blue-900 hover:underline break-all"
+                    >
+                      {lpId}
+                    </a>
+                  </span>
                 </p>
                 <button
                   onClick={() => copyToClipboard(lpId, "Liquidity Pool ID")}
@@ -148,7 +160,9 @@ const AddLiquidity: React.FC = () => {
               <div className="mt-4">
                 <p className="text-lg">
                   <strong>Transaction Hash:</strong>
-                  <span className="block truncate text-gray-800">{txnHash}</span>
+                  <span className="mt-1 block">
+                    <TxHashLink hash={txnHash} />
+                  </span>
                 </p>
                 <button
                   onClick={() => copyToClipboard(txnHash, "Transaction Hash")}
