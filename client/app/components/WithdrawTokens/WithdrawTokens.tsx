@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, FormEvent } from "react";
 import toast from "react-hot-toast";
+import TxHashLink from "../TxHashLink";
 import SecretKeyInput from "../SecretKeyInput";
 import SlippageSelector from "../SlippageSelector";
 
@@ -120,7 +121,9 @@ const WithdrawTokens: React.FC = () => {
               </h3>
               <p className="mt-2 text-lg">
                 <strong>Transaction Hash:</strong>
-                <span className="block truncate text-gray-800">{txnHash}</span>
+                <span className="mt-1 block">
+                  <TxHashLink hash={txnHash} />
+                </span>
               </p>
               <button
                 onClick={() => txnHash && copyToClipboard(txnHash, "Transaction Hash")}

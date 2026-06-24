@@ -73,6 +73,28 @@ function formatAsset(assetType, assetCode) {
     return assetType === 'native' ? 'XLM' : assetCode;
 }
 
+function validateAssetCode(code) {
+    if (!code || typeof code !== 'string' || !/^[a-zA-Z0-9]{1,12}$/.test(code)) {
+        return 'destAssetCode must be 1-12 alphanumeric characters';
+    }
+    return null;
+}
+
+function validateIssuerAddress(address) {
+    if (!address || !StrKey.isValidEd25519PublicKey(address)) {
+        return 'issuerAddress must be a valid Stellar public key';
+    }
+    return null;
+}
+
+function validatePositiveAmount(amount, field) {
+    const parsed = parseFloat(amount);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+        return `${field} must be a positive number`;
+    }
+    return null;
+}
+
 function mapOperation(op) {
     return {
         id: op.id,
@@ -363,5 +385,51 @@ exports.getAccountInfo = async (req, res) => {
             return res.status(404).json({ error: 'Account not found. It may not be funded yet.' });
         }
         res.status(500).json({ error: 'Failed to fetch account info' });
+    }
+};
+
+exports.getSwapQuote = async (req, res) => {
+    const { destAssetCode, issuerAddress, destAmount } = req.body;
+
+    const errors = [
+        validateAssetCode(destAssetCode),
+        validateIssuerAddress(issuerAddress),
+        validatePositiveAmount(destAmount, 'destAmount'),
+    ].filter(Boolean);
+    if (errors.length) {
+        return res.status(400).json({ errors });
+    }
+
+    const server = new Horizon.Server(process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org');
+    const destAsset = new Asset(destAssetCode, issuerAddress);
+
+    try {
+        const paths = await server
+            .strictReceivePaths([Asset.native()], destAsset, String(destAmount))
+            .call();
+
+        if (!paths.records.length) {
+            return res.status(404).json({ error: 'No swap route found. There may be insufficient liquidity.' });
+        }
+
+        const best = paths.records.reduce((a, b) =>
+            parseFloat(a.source_amount) < parseFloat(b.source_amount) ? a : b
+        );
+
+        const sourceAmount = best.source_amount;
+        if (!(parseFloat(sourceAmount) > 0)) {
+            return res.status(500).json({ error: 'Failed to fetch swap quote' });
+        }
+
+        res.json({
+            sourceAsset: 'XLM',
+            sourceAmount,
+            destAsset: destAssetCode,
+            destAmount: String(destAmount),
+            path: best.path.map(a => a.asset_code || 'XLM'),
+            exchangeRate: (parseFloat(destAmount) / parseFloat(sourceAmount)).toFixed(7),
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch swap quote' });
     }
 };
