@@ -1,7 +1,6 @@
 const {
     Keypair,
     Horizon,
-    SorobanRpc,
     StrKey,
     TransactionBuilder,
     Asset,
@@ -25,14 +24,6 @@ const parseSlippage = (raw) => {
 
 exports.welcomeMsg = async (req, res) => {
     res.status(200).json({ message: "Welcome to Nexus Swap!" });
-};
-
-exports.generateKeyPair = async (req, res) => {
-    const keypair = Keypair.random();
-    res.json({
-        publicKey: keypair.publicKey(),
-        secretKey: keypair.secret()
-    });
 };
 
 async function fundAccountWithFriendbot(address) {
@@ -184,11 +175,11 @@ exports.depositTokens = async (req, res) => {
         return res.status(400).json({ error: 'amountA and amountB must be positive numbers' });
     }
 
-    const server = new SorobanRpc.Server('https://soroban-testnet.stellar.org');
+    const server = new Horizon.Server(process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org');
 
     try {
         const keypair = Keypair.fromSecret(secretKey);
-        const account = await server.getAccount(keypair.publicKey());
+        const account = await server.loadAccount(keypair.publicKey());
 
         const asset = new Asset(tokenName, keypair.publicKey());
         const liquidityPoolAsset = new LiquidityPoolAsset(Asset.native(), asset, 30);
@@ -218,11 +209,26 @@ exports.depositTokens = async (req, res) => {
             .build();
 
         depositTransaction.sign(keypair);
-        const result = await server.sendTransaction(depositTransaction);
+        const result = await server.submitTransaction(depositTransaction);
 
-        res.json({ message: 'Deposit successful', asset, liquidityPoolId, transactionHash: result });
+        res.json({
+            message: 'Deposit successful',
+            asset,
+            liquidityPoolId,
+            transactionHash: result,
+            ledger: result.ledger,
+            createdAt: result.created_at,
+        });
     } catch (error) {
-        res.status(500).json({ error: `Error depositing tokens: ${error.message}` });
+        const resultCodes = error?.response?.data?.extras?.result_codes;
+        if (resultCodes) {
+            return res.status(400).json({
+                error: 'Transaction failed',
+                transactionCode: resultCodes.transaction,
+                operationCodes: resultCodes.operations,
+            });
+        }
+        res.status(500).json({ error: 'An unexpected error occurred' });
     }
 };
 
@@ -234,11 +240,11 @@ exports.withdrawTokens = async (req, res) => {
         return res.status(400).json({ error: 'Slippage must be a number between 0.01 and 50' });
     }
 
-    const server = new SorobanRpc.Server('https://soroban-testnet.stellar.org');
+    const server = new Horizon.Server(process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org');
 
     try {
         const keypair = Keypair.fromSecret(secretKey);
-        const account = await server.getAccount(keypair.publicKey());
+        const account = await server.loadAccount(keypair.publicKey());
 
         const withdrawTransaction = new TransactionBuilder(account, {
             fee: BASE_FEE,
@@ -257,21 +263,34 @@ exports.withdrawTokens = async (req, res) => {
             .build();
 
         withdrawTransaction.sign(keypair);
-        const result = await server.sendTransaction(withdrawTransaction);
+        const result = await server.submitTransaction(withdrawTransaction);
 
-        res.json({ message: 'Withdrawal successful', transactionHash: result});
+        res.json({
+            message: 'Withdrawal successful',
+            transactionHash: result,
+            ledger: result.ledger,
+            createdAt: result.created_at,
+        });
     } catch (error) {
-        res.status(500).json({ error: `Error withdrawing tokens: ${error.message}` });
+        const resultCodes = error?.response?.data?.extras?.result_codes;
+        if (resultCodes) {
+            return res.status(400).json({
+                error: 'Transaction failed',
+                transactionCode: resultCodes.transaction,
+                operationCodes: resultCodes.operations,
+            });
+        }
+        res.status(500).json({ error: 'An unexpected error occurred' });
     }
 };
 
 exports.swapTokens = async (req, res) => {
     const { secretKey, destAssetCode, issuerAddress, sendMax, destAmount } = req.body;
-    const server = new SorobanRpc.Server('https://soroban-testnet.stellar.org');
+    const server = new Horizon.Server(process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org');
 
     try {
         const keypair = Keypair.fromSecret(secretKey);
-        const account = await server.getAccount(keypair.publicKey());
+        const account = await server.loadAccount(keypair.publicKey());
         const destAsset = new Asset(destAssetCode, issuerAddress);
         const swapTransaction = new TransactionBuilder(account, {
             fee: BASE_FEE,
@@ -293,10 +312,56 @@ exports.swapTokens = async (req, res) => {
             .build();
 
         swapTransaction.sign(keypair);
-        const result = await server.sendTransaction(swapTransaction);
+        const result = await server.submitTransaction(swapTransaction);
 
-        res.json({ message: 'Swap successful', transactionHash: result});
+        res.json({
+            message: 'Swap successful',
+            transactionHash: result,
+            ledger: result.ledger,
+            createdAt: result.created_at,
+        });
     } catch (error) {
-        res.status(500).json({ error: `Error performing swap: ${error.message}` });
+        const resultCodes = error?.response?.data?.extras?.result_codes;
+        if (resultCodes) {
+            return res.status(400).json({
+                error: 'Transaction failed',
+                transactionCode: resultCodes.transaction,
+                operationCodes: resultCodes.operations,
+            });
+        }
+        res.status(500).json({ error: 'An unexpected error occurred' });
+    }
+};
+
+exports.getAccountInfo = async (req, res) => {
+    const { publicKey } = req.params;
+
+    if (!StrKey.isValidEd25519PublicKey(publicKey)) {
+        return res.status(400).json({ error: 'Invalid public key format' });
+    }
+
+    const server = new Horizon.Server(process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org');
+
+    try {
+        const account = await server.loadAccount(publicKey);
+
+        const balances = account.balances.map(b => ({
+            assetType: b.asset_type,
+            assetCode: b.asset_type === 'native' ? 'XLM' : b.asset_code,
+            issuer: b.asset_issuer || null,
+            balance: b.balance,
+            liquidityPoolId: b.liquidity_pool_id || null,
+        }));
+
+        res.json({
+            publicKey: account.id,
+            sequenceNumber: account.sequence,
+            balances,
+        });
+    } catch (error) {
+        if (error?.response?.status === 404) {
+            return res.status(404).json({ error: 'Account not found. It may not be funded yet.' });
+        }
+        res.status(500).json({ error: 'Failed to fetch account info' });
     }
 };
