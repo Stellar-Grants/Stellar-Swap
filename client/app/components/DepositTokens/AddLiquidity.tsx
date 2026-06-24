@@ -3,12 +3,15 @@ import React, { useState, FormEvent } from "react";
 import toast from "react-hot-toast";
 import TxHashLink from "../TxHashLink";
 import { liquidityPoolExplorerUrl } from "../../lib/stellarExpert";
+import SecretKeyInput from "../SecretKeyInput";
+import SlippageSelector from "../SlippageSelector";
 
 const AddLiquidity: React.FC = () => {
   const [secretKey, setSecretKey] = useState<string>("");
   const [tokenName, setTokenName] = useState<string>("");
   const [amountA, setAmountA] = useState<string>("");
   const [amountB, setAmountB] = useState<string>("");
+  const [slippage, setSlippage] = useState<string>("1.0");
   const [lpId, setLpId] = useState<string | null>(null);
   const [txnHash, setTxnHash] = useState<string | null>(null);
 
@@ -19,6 +22,7 @@ const AddLiquidity: React.FC = () => {
       tokenName,
       amountA,
       amountB,
+      slippage,
     };
 
     try {
@@ -41,6 +45,7 @@ const AddLiquidity: React.FC = () => {
         setTokenName("");
         setAmountA("");
         setAmountB("");
+        setSlippage("1.0");
       } else {
         const error = await response.json();
         toast.error(`Error during deposit tokens: ${error.error}`);
@@ -76,11 +81,9 @@ const AddLiquidity: React.FC = () => {
                 <label className="block text-gray-700 text-lg font-medium mb-2">
                   Secret Key
                 </label>
-                <input
-                  type="text"
+                <SecretKeyInput
                   value={secretKey}
-                  onChange={(e) => setSecretKey(e.target.value)}
-                  className="mt-1 block w-full h-[40px] bg-gray-100 text-black rounded-md px-3 border border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  onChange={setSecretKey}
                   required
                 />
               </div>
@@ -123,6 +126,7 @@ const AddLiquidity: React.FC = () => {
                 />
               </div>
             </div>
+            <SlippageSelector value={slippage} onChange={setSlippage} />
             <button
               type="submit"
               className="w-full py-3 bg-indigo-600 text-white font-semibold rounded-md shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
