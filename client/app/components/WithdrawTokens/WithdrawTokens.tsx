@@ -7,6 +7,7 @@ const WithdrawTokens: React.FC = () => {
   const [secretKey, setSecretKey] = useState<string>("");
   const [liquidityPoolId, setLiquidityPoolId] = useState<string>("");
   const [amount, setAmount] = useState<string>("");
+  const [slippage, setSlippage] = useState<string>("1.0");
   const [txnHash, setTxnHash] = useState<string | null>(null);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -15,6 +16,7 @@ const WithdrawTokens: React.FC = () => {
       secretKey,
       liquidityPoolId,
       amount,
+      slippage,
     };
 
     try {
@@ -34,6 +36,7 @@ const WithdrawTokens: React.FC = () => {
         setSecretKey("");
         setLiquidityPoolId("");
         setAmount("");
+        setSlippage("1.0");
       } else {
         const error = await response.json();
         toast.error(`Error during withdrawal: ${error.error}`);
@@ -101,6 +104,7 @@ const WithdrawTokens: React.FC = () => {
                 />
               </div>
             </div>
+            <SlippageSelector value={slippage} onChange={setSlippage} />
             <button
               type="submit"
               className="w-full py-3 bg-indigo-600 text-white font-semibold rounded-md shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
@@ -115,7 +119,9 @@ const WithdrawTokens: React.FC = () => {
               </h3>
               <p className="mt-2 text-lg">
                 <strong>Transaction Hash:</strong>
-                <span className="block truncate text-gray-800">{txnHash}</span>
+                <span className="mt-1 block">
+                  <TxHashLink hash={txnHash} />
+                </span>
               </p>
               <button
                 onClick={() => txnHash && copyToClipboard(txnHash, "Transaction Hash")}

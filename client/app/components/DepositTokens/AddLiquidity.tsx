@@ -8,6 +8,7 @@ const AddLiquidity: React.FC = () => {
   const [tokenName, setTokenName] = useState<string>("");
   const [amountA, setAmountA] = useState<string>("");
   const [amountB, setAmountB] = useState<string>("");
+  const [slippage, setSlippage] = useState<string>("1.0");
   const [lpId, setLpId] = useState<string | null>(null);
   const [txnHash, setTxnHash] = useState<string | null>(null);
 
@@ -18,6 +19,7 @@ const AddLiquidity: React.FC = () => {
       tokenName,
       amountA,
       amountB,
+      slippage,
     };
 
     try {
@@ -40,6 +42,7 @@ const AddLiquidity: React.FC = () => {
         setTokenName("");
         setAmountA("");
         setAmountB("");
+        setSlippage("1.0");
       } else {
         const error = await response.json();
         toast.error(`Error during deposit tokens: ${error.error}`);
@@ -120,6 +123,7 @@ const AddLiquidity: React.FC = () => {
                 />
               </div>
             </div>
+            <SlippageSelector value={slippage} onChange={setSlippage} />
             <button
               type="submit"
               className="w-full py-3 bg-indigo-600 text-white font-semibold rounded-md shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
@@ -135,7 +139,17 @@ const AddLiquidity: React.FC = () => {
               <div className="mt-4">
                 <p className="text-lg">
                   <strong>Liquidity Pool ID:</strong>
-                  <span className="block truncate text-gray-800">{lpId}</span>
+                  <span className="mt-1 block">
+                    <a
+                      href={liquidityPoolExplorerUrl(lpId)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={lpId}
+                      className="font-mono font-semibold text-blue-700 hover:text-blue-900 hover:underline break-all"
+                    >
+                      {lpId}
+                    </a>
+                  </span>
                 </p>
                 <button
                   onClick={() => copyToClipboard(lpId, "Liquidity Pool ID")}
@@ -147,7 +161,9 @@ const AddLiquidity: React.FC = () => {
               <div className="mt-4">
                 <p className="text-lg">
                   <strong>Transaction Hash:</strong>
-                  <span className="block truncate text-gray-800">{txnHash}</span>
+                  <span className="mt-1 block">
+                    <TxHashLink hash={txnHash} />
+                  </span>
                 </p>
                 <button
                   onClick={() => copyToClipboard(txnHash, "Transaction Hash")}
