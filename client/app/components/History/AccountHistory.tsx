@@ -42,6 +42,10 @@ type AccountOperation = {
   asset?: string;
   amount?: string;
   limit?: string;
+  funder?: string;
+  account?: string;
+  startingBalance?: string;
+  into?: string;
 };
 
 type HistoryResponse = {
@@ -92,6 +96,13 @@ function assetName(asset: string) {
   }
 
   return asset.split(":")[0] || asset;
+}
+
+function shortenKey(key: string) {
+  if (key.length <= 12) {
+    return key;
+  }
+  return `${key.slice(0, 6)}...${key.slice(-4)}`;
 }
 
 function formatReserves(reserves?: ReserveAmount[]) {
@@ -173,6 +184,22 @@ function operationDetails(operation: AccountOperation) {
     return `${operation.amount || "?"} ${operation.asset || "asset"} from ${
       operation.from || "unknown"
     } to ${operation.to || "unknown"}`;
+  }
+
+  if (operation.type === "create_account") {
+    return [
+      operation.account ? `Account ${shortenKey(operation.account)}` : "New account",
+      operation.startingBalance ? `funded with ${operation.startingBalance} XLM` : null,
+      operation.funder ? `by ${shortenKey(operation.funder)}` : null,
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (operation.type === "account_merge") {
+    return operation.into
+      ? `Merged into ${shortenKey(operation.into)}`
+      : "Account merged";
   }
 
   return "Operation completed";
