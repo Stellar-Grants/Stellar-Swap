@@ -140,6 +140,15 @@ function mapOperation(op) {
             asset: formatAsset(op.asset_type, op.asset_code),
             amount: op.amount,
         }),
+        ...(op.type === 'create_account' && {
+            funder: op.funder,
+            account: op.account,
+            startingBalance: op.starting_balance,
+        }),
+        ...(op.type === 'account_merge' && {
+            from: op.source_account,
+            into: op.into,
+        }),
     };
 }
 
