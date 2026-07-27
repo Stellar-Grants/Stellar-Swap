@@ -24,6 +24,7 @@ const SecretKeyInput: React.FC<SecretKeyInputProps> = ({
         autoComplete="off"
         required={required}
         className="mt-1 block w-full h-[40px] bg-gray-100 text-black rounded-md px-3 pr-10 border border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+        placeholder="Enter secret key (starts with S)"
       />
       <button
         type="button"
