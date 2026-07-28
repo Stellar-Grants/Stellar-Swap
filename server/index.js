@@ -3,8 +3,24 @@ const morgan = require("morgan");
 const tokenRoute = require("./routes/tokenRoute");
 const cors = require("cors");
 const dotenv = require("dotenv");
+const { validateEnv } = require("./utils/validateEnv");
 dotenv.config();
 const app = express();
+
+function checkEnv() {
+    const { errors, warnings } = validateEnv();
+
+    if (warnings.length > 0) {
+        console.warn('[Config] Warnings:\n' + warnings.map(w => `  ⚠ ${w}`).join('\n'));
+    }
+
+    if (errors.length > 0) {
+        console.error('[Config] Fatal errors — server cannot start:\n' + errors.map(e => `  ✗ ${e}`).join('\n'));
+        process.exit(1);
+    }
+
+    console.log('[Config] Environment validated successfully.');
+}
 
 const corsOptions = {
     origin: '*',
@@ -31,4 +47,5 @@ const start = async () => {
     }
 };
 
+checkEnv();
 start();
