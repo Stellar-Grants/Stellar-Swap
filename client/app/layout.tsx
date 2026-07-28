@@ -1,5 +1,6 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { Toaster } from "react-hot-toast";
 
 export const metadata: Metadata = {
@@ -12,7 +13,11 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
- 
+  // Reading headers() opts this layout into per-request dynamic rendering,
+  // which is required for the nonce middleware.ts sets to be valid (a
+  // nonce baked into a statically-generated page would never match).
+  headers().get("x-nonce");
+
   return (
     <html lang="en">
       <body>
