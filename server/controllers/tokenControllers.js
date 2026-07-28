@@ -21,6 +21,28 @@ const parseSlippage = (raw) => {
     return slippage;
 };
 
+// Query Horizon for current network fee conditions and recommend a fee that
+// clears surge pricing. Uses the p90 charged fee so the transaction is
+// unlikely to be evicted from the queue without overpaying. Falls back to a
+// safe multiplier of BASE_FEE if fee stats are unavailable.
+async function getRecommendedFee(server) {
+    try {
+        const feeStats = await server.feeStats();
+        const p90Fee = parseInt(feeStats.fee_charged?.p90 || BASE_FEE, 10);
+        return Math.max(parseInt(BASE_FEE, 10), p90Fee, 1000).toString();
+    } catch (err) {
+        console.error('Failed to fetch fee stats, using fallback fee:', err.message);
+        return (parseInt(BASE_FEE, 10) * 10).toString();
+    }
+}
+
+// Horizon's submitTransaction() blocks until the transaction is included in
+// a ledger, or rejects. A confirmation timeout surfaces as either an HTTP 504
+// from Horizon or a client-side axios timeout (no response received).
+function isSubmitTimeout(error) {
+    return error?.response?.status === 504 || error?.code === 'ECONNABORTED';
+}
+
 
 exports.welcomeMsg = async (req, res) => {
     res.status(200).json({ message: "Welcome to Nexus Swap!" });
@@ -207,6 +229,7 @@ exports.depositTokens = async (req, res) => {
     }
 
     const server = new Horizon.Server(process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org');
+    let txHash;
 
     try {
         const keypair = Keypair.fromSecret(secretKey);
@@ -222,8 +245,11 @@ exports.depositTokens = async (req, res) => {
         const minPrice = (price * (1 - slippagePct)).toFixed(7);
         const maxPrice = (price * (1 + slippagePct)).toFixed(7);
 
+        const recommendedFee = await getRecommendedFee(server);
+        console.log(`[depositTokens] Using recommended fee: ${recommendedFee} stroops`);
+
         const depositTransaction = new TransactionBuilder(account, {
-            fee: BASE_FEE,
+            fee: recommendedFee,
             networkPassphrase: Networks.TESTNET
         })
             .addOperation(Operation.changeTrust({
@@ -239,6 +265,7 @@ exports.depositTokens = async (req, res) => {
             .setTimeout(30)
             .build();
 
+        txHash = depositTransaction.hash().toString('hex');
         depositTransaction.sign(keypair);
         const result = await server.submitTransaction(depositTransaction);
 
@@ -246,11 +273,18 @@ exports.depositTokens = async (req, res) => {
             message: 'Deposit successful',
             asset,
             liquidityPoolId,
+            fee: recommendedFee,
             transactionHash: result,
             ledger: result.ledger,
             createdAt: result.created_at,
         });
     } catch (error) {
+        if (isSubmitTimeout(error)) {
+            return res.status(504).json({
+                error: 'Transaction submission timed out before confirmation. It may still be included in a later ledger.',
+                transactionHash: txHash,
+            });
+        }
         const resultCodes = error?.response?.data?.extras?.result_codes;
         if (resultCodes) {
             return res.status(400).json({
@@ -272,13 +306,17 @@ exports.withdrawTokens = async (req, res) => {
     }
 
     const server = new Horizon.Server(process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org');
+    let txHash;
 
     try {
         const keypair = Keypair.fromSecret(secretKey);
         const account = await server.loadAccount(keypair.publicKey());
 
+        const recommendedFee = await getRecommendedFee(server);
+        console.log(`[withdrawTokens] Using recommended fee: ${recommendedFee} stroops`);
+
         const withdrawTransaction = new TransactionBuilder(account, {
-            fee: BASE_FEE,
+            fee: recommendedFee,
             networkPassphrase: Networks.TESTNET
         })
             .addOperation(Operation.liquidityPoolWithdraw({
@@ -293,16 +331,24 @@ exports.withdrawTokens = async (req, res) => {
             .setTimeout(30)
             .build();
 
+        txHash = withdrawTransaction.hash().toString('hex');
         withdrawTransaction.sign(keypair);
         const result = await server.submitTransaction(withdrawTransaction);
 
         res.json({
             message: 'Withdrawal successful',
+            fee: recommendedFee,
             transactionHash: result,
             ledger: result.ledger,
             createdAt: result.created_at,
         });
     } catch (error) {
+        if (isSubmitTimeout(error)) {
+            return res.status(504).json({
+                error: 'Transaction submission timed out before confirmation. It may still be included in a later ledger.',
+                transactionHash: txHash,
+            });
+        }
         const resultCodes = error?.response?.data?.extras?.result_codes;
         if (resultCodes) {
             return res.status(400).json({
@@ -318,13 +364,18 @@ exports.withdrawTokens = async (req, res) => {
 exports.swapTokens = async (req, res) => {
     const { secretKey, destAssetCode, issuerAddress, sendMax, destAmount } = req.body;
     const server = new Horizon.Server(process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org');
+    let txHash;
 
     try {
         const keypair = Keypair.fromSecret(secretKey);
         const account = await server.loadAccount(keypair.publicKey());
         const destAsset = new Asset(destAssetCode, issuerAddress);
+
+        const recommendedFee = await getRecommendedFee(server);
+        console.log(`[swapTokens] Using recommended fee: ${recommendedFee} stroops`);
+
         const swapTransaction = new TransactionBuilder(account, {
-            fee: BASE_FEE,
+            fee: recommendedFee,
             networkPassphrase: Networks.TESTNET
         })
             .addOperation(Operation.changeTrust({
@@ -342,20 +393,88 @@ exports.swapTokens = async (req, res) => {
             .setTimeout(30)
             .build();
 
+        txHash = swapTransaction.hash().toString('hex');
         swapTransaction.sign(keypair);
         const result = await server.submitTransaction(swapTransaction);
 
         res.json({
             message: 'Swap successful',
+            fee: recommendedFee,
             transactionHash: result,
             ledger: result.ledger,
             createdAt: result.created_at,
         });
     } catch (error) {
+        if (isSubmitTimeout(error)) {
+            return res.status(504).json({
+                error: 'Transaction submission timed out before confirmation. It may still be included in a later ledger.',
+                transactionHash: txHash,
+            });
+        }
         const resultCodes = error?.response?.data?.extras?.result_codes;
         if (resultCodes) {
             return res.status(400).json({
                 error: 'Transaction failed',
+                transactionCode: resultCodes.transaction,
+                operationCodes: resultCodes.operations,
+            });
+        }
+        res.status(500).json({ error: 'An unexpected error occurred' });
+    }
+};
+
+// Wraps a previously-submitted (and now stuck) transaction in a fee-bump
+// transaction with a higher fee, without needing to re-sign the inner
+// transaction. Rescues transactions dropped from the queue during surge
+// pricing per CAP-15 / Protocol 13+. By CAP-15 design, any funded account
+// can sponsor any inner transaction's fee, so feeAccountSecret need not
+// belong to the inner transaction's source account.
+exports.feeBumpTransaction = async (req, res) => {
+    const { innerTxXdr, feeAccountSecret } = req.body;
+
+    if (!innerTxXdr || !feeAccountSecret) {
+        return res.status(400).json({ error: 'innerTxXdr and feeAccountSecret are required' });
+    }
+
+    const server = new Horizon.Server(process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org');
+    let txHash;
+
+    try {
+        const feeKeypair = Keypair.fromSecret(feeAccountSecret);
+        const innerTx = TransactionBuilder.fromXDR(innerTxXdr, Networks.TESTNET);
+
+        const recommendedFee = await getRecommendedFee(server);
+        const feeBumpFee = (parseInt(recommendedFee, 10) * 10).toString();
+
+        const feeBumpTx = TransactionBuilder.buildFeeBumpTransaction(
+            feeKeypair,
+            feeBumpFee,
+            innerTx,
+            Networks.TESTNET
+        );
+
+        txHash = feeBumpTx.hash().toString('hex');
+        feeBumpTx.sign(feeKeypair);
+        const result = await server.submitTransaction(feeBumpTx);
+
+        res.json({
+            message: 'Fee bump submitted',
+            fee: feeBumpFee,
+            transactionHash: result,
+            ledger: result.ledger,
+            createdAt: result.created_at,
+        });
+    } catch (error) {
+        if (isSubmitTimeout(error)) {
+            return res.status(504).json({
+                error: 'Fee bump submission timed out before confirmation. It may still be included in a later ledger.',
+                transactionHash: txHash,
+            });
+        }
+        const resultCodes = error?.response?.data?.extras?.result_codes;
+        if (resultCodes) {
+            return res.status(400).json({
+                error: 'Fee bump transaction failed',
                 transactionCode: resultCodes.transaction,
                 operationCodes: resultCodes.operations,
             });
