@@ -1,8 +1,13 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
 import { Keypair } from "@stellar/stellar-sdk";
 import CopyButton from "../CopyButton";
+import {
+  ACKNOWLEDGEMENT_LABEL,
+  createBeforeUnloadHandler,
+  secretAtRisk,
+} from "./secretGuard";
 
 interface WalletData {
   [key: string]: string;
@@ -14,6 +19,10 @@ const CreateWallet = () => {
   const [keypair, setKeypair] = useState({ publicKey: "", secret: "" });
   const [publicKeyToFund, setPublicKeyToFund] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  // Becomes true only when the user explicitly confirms they have saved the
+  // secret key. Until then the wallet is one navigation away from being lost.
+  const [keyAcknowledged, setKeyAcknowledged] = useState(false);
+  const hasGeneratedRef = useRef(false);
 
   const closeModal = () => {
     setAnimate(false);
@@ -23,8 +32,34 @@ const CreateWallet = () => {
 
   useEffect(() => {
     setAnimate(true);
+    // Generate exactly once. A ref guard (rather than relying on the empty
+    // dependency array alone) keeps React 18 Strict Mode's double-invoked
+    // mount effect from silently replacing the first keypair in development.
+    if (hasGeneratedRef.current) return;
+    hasGeneratedRef.current = true;
     generateKeypair();
   }, []);
+
+  // While an unacknowledged secret key exists, block the browser's own
+  // navigation paths — tab close, refresh, back/forward, typed URL — with the
+  // native "Leave site?" prompt. The listener is registered only when the key
+  // is actually at risk and torn down as soon as it is acknowledged or the
+  // component unmounts, so it is never left dangling or duplicated.
+  //
+  // Limitation: Next.js App Router exposes no route-change event, so an
+  // in-app <Link> click cannot be intercepted here. CreateWallet renders no
+  // such links, and disabling "Fund Wallet" until acknowledgement keeps the
+  // user on this screen until the key is safe.
+  useEffect(() => {
+    if (!secretAtRisk(keypair.secret, keyAcknowledged)) return;
+
+    const handleBeforeUnload = createBeforeUnloadHandler(() =>
+      secretAtRisk(keypair.secret, keyAcknowledged)
+    );
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () =>
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [keypair.secret, keyAcknowledged]);
 
   const handleAttributeChange = (attribute: string, value: string) => {
     setWalletData((prevData) => ({ ...prevData, [attribute]: value }));
@@ -39,6 +74,8 @@ const CreateWallet = () => {
       secret: keypair.secret(),
     });
     setPublicKeyToFund(keypair.publicKey());
+    // A new secret is a new unsaved secret — the user must acknowledge it afresh.
+    setKeyAcknowledged(false);
   };
 
   const fundXLMTokens = async () => {
@@ -117,11 +154,22 @@ const CreateWallet = () => {
           <CopyButton data={keypair.secret} />
         </div>
 
-        <div className="mb-6 rounded-md border border-yellow-400 bg-yellow-50 p-3 text-sm text-yellow-800">
+        <div className="mb-4 rounded-md border border-yellow-400 bg-yellow-50 p-3 text-sm text-yellow-800">
           <strong>Save your secret key now.</strong> It is generated locally in
           your browser and never sent to any server. We cannot recover it for
-          you — anyone with this key controls the wallet.
+          you — anyone with this key controls the wallet, and losing it means
+          losing the wallet permanently.
         </div>
+
+        <label className="mb-6 flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={keyAcknowledged}
+            onChange={(e) => setKeyAcknowledged(e.target.checked)}
+            className="mt-1 h-4 w-4 accent-blue-600"
+          />
+          <span>{ACKNOWLEDGEMENT_LABEL}</span>
+        </label>
 
         <div className="flex flex-col md:flex-row gap-4 justify-center">
           <button
@@ -135,8 +183,13 @@ const CreateWallet = () => {
 
           <button
             onClick={fundXLMTokens}
-            className={`bg-blue-600 py-3 px-6 rounded text-white hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 ${!keypair.publicKey ? "opacity-50 cursor-not-allowed" : ""}`}
-            disabled={!keypair.publicKey}
+            className={`bg-blue-600 py-3 px-6 rounded text-white hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 ${!keypair.publicKey || !keyAcknowledged ? "opacity-50 cursor-not-allowed" : ""}`}
+            disabled={!keypair.publicKey || !keyAcknowledged || isLoading}
+            title={
+              !keyAcknowledged
+                ? "Confirm you have saved your secret key first"
+                : undefined
+            }
           >
             Fund Wallet
           </button>
