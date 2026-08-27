@@ -10,7 +10,7 @@ const {
     BASE_FEE,
     Networks
 } = require('@stellar/stellar-sdk');
-const { buildAndSubmitWithRetry } = require('../utils/stellarTx');
+const { buildAndSubmitWithRetry, isSubmitTimeout, classicFailureResponse } = require('../utils/stellarTx');
 
 
 // Parse and validate a user-provided slippage tolerance (in percent).
@@ -36,14 +36,6 @@ async function getRecommendedFee(server) {
         return (parseInt(BASE_FEE, 10) * 10).toString();
     }
 }
-
-// Horizon's submitTransaction() blocks until the transaction is included in
-// a ledger, or rejects. A confirmation timeout surfaces as either an HTTP 504
-// from Horizon or a client-side axios timeout (no response received).
-function isSubmitTimeout(error) {
-    return error?.response?.status === 504 || error?.code === 'ECONNABORTED';
-}
-
 
 exports.welcomeMsg = async (req, res) => {
     res.status(200).json({ message: "Welcome to Nexus Swap!" });
@@ -230,7 +222,6 @@ exports.depositTokens = async (req, res) => {
     }
 
     const server = new Horizon.Server(process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org');
-    let txHash;
 
     try {
         const keypair = Keypair.fromSecret(secretKey);
@@ -245,9 +236,11 @@ exports.depositTokens = async (req, res) => {
         const minPrice = (price * (1 - slippagePct)).toFixed(7);
         const maxPrice = (price * (1 + slippagePct)).toFixed(7);
 
+        const recommendedFee = await getRecommendedFee(server);
+
         const result = await buildAndSubmitWithRetry(server, keypair, (account) =>
             new TransactionBuilder(account, {
-                fee: BASE_FEE,
+                fee: recommendedFee,
                 networkPassphrase: Networks.TESTNET
             })
                 .addOperation(Operation.changeTrust({
@@ -269,23 +262,13 @@ exports.depositTokens = async (req, res) => {
             asset,
             liquidityPoolId,
             fee: recommendedFee,
-            transactionHash: result,
+            transactionHash: result.hash,
             ledger: result.ledger,
             createdAt: result.created_at,
         });
     } catch (error) {
-        if (error?.isSequenceConflict) {
-            return res.status(500).json({ error: error.message });
-        }
-        const resultCodes = error?.response?.data?.extras?.result_codes;
-        if (resultCodes) {
-            return res.status(400).json({
-                error: 'Transaction failed',
-                transactionCode: resultCodes.transaction,
-                operationCodes: resultCodes.operations,
-            });
-        }
-        res.status(500).json({ error: 'An unexpected error occurred' });
+        const { status, body } = classicFailureResponse(error);
+        res.status(status).json(body);
     }
 };
 
@@ -298,14 +281,15 @@ exports.withdrawTokens = async (req, res) => {
     }
 
     const server = new Horizon.Server(process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org');
-    let txHash;
 
     try {
         const keypair = Keypair.fromSecret(secretKey);
 
+        const recommendedFee = await getRecommendedFee(server);
+
         const result = await buildAndSubmitWithRetry(server, keypair, (account) =>
             new TransactionBuilder(account, {
-                fee: BASE_FEE,
+                fee: recommendedFee,
                 networkPassphrase: Networks.TESTNET
             })
                 .addOperation(Operation.liquidityPoolWithdraw({
@@ -324,38 +308,29 @@ exports.withdrawTokens = async (req, res) => {
         res.json({
             message: 'Withdrawal successful',
             fee: recommendedFee,
-            transactionHash: result,
+            transactionHash: result.hash,
             ledger: result.ledger,
             createdAt: result.created_at,
         });
     } catch (error) {
-        if (error?.isSequenceConflict) {
-            return res.status(500).json({ error: error.message });
-        }
-        const resultCodes = error?.response?.data?.extras?.result_codes;
-        if (resultCodes) {
-            return res.status(400).json({
-                error: 'Transaction failed',
-                transactionCode: resultCodes.transaction,
-                operationCodes: resultCodes.operations,
-            });
-        }
-        res.status(500).json({ error: 'An unexpected error occurred' });
+        const { status, body } = classicFailureResponse(error);
+        res.status(status).json(body);
     }
 };
 
 exports.swapTokens = async (req, res) => {
     const { secretKey, destAssetCode, issuerAddress, sendMax, destAmount } = req.body;
     const server = new Horizon.Server(process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org');
-    let txHash;
 
     try {
         const keypair = Keypair.fromSecret(secretKey);
         const destAsset = new Asset(destAssetCode, issuerAddress);
 
+        const recommendedFee = await getRecommendedFee(server);
+
         const result = await buildAndSubmitWithRetry(server, keypair, (account) =>
             new TransactionBuilder(account, {
-                fee: BASE_FEE,
+                fee: recommendedFee,
                 networkPassphrase: Networks.TESTNET
             })
                 .addOperation(Operation.changeTrust({
@@ -377,23 +352,13 @@ exports.swapTokens = async (req, res) => {
         res.json({
             message: 'Swap successful',
             fee: recommendedFee,
-            transactionHash: result,
+            transactionHash: result.hash,
             ledger: result.ledger,
             createdAt: result.created_at,
         });
     } catch (error) {
-        if (error?.isSequenceConflict) {
-            return res.status(500).json({ error: error.message });
-        }
-        const resultCodes = error?.response?.data?.extras?.result_codes;
-        if (resultCodes) {
-            return res.status(400).json({
-                error: 'Transaction failed',
-                transactionCode: resultCodes.transaction,
-                operationCodes: resultCodes.operations,
-            });
-        }
-        res.status(500).json({ error: 'An unexpected error occurred' });
+        const { status, body } = classicFailureResponse(error);
+        res.status(status).json(body);
     }
 };
 
