@@ -15,6 +15,44 @@ function isBadSequenceError(error) {
     return error?.response?.data?.extras?.result_codes?.transaction === 'txBAD_SEQ';
 }
 
+// Horizon's submitTransaction() blocks until the transaction is included in a
+// ledger, or rejects. A confirmation timeout surfaces as either an HTTP 504
+// from Horizon or a client-side axios timeout (no response received).
+function isSubmitTimeout(error) {
+    return error?.response?.status === 504 || error?.code === 'ECONNABORTED';
+}
+
+// Maps a failed Classic Stellar submission to an { status, body } pair for the
+// API response. Prefers Horizon's decoded result_codes (the transaction-level
+// code and the per-operation codes); otherwise falls back to the sequence
+// conflict and confirmation-timeout signals, then a generic 500.
+function classicFailureResponse(error) {
+    if (error?.isSequenceConflict) {
+        return { status: 500, body: { error: error.message } };
+    }
+    if (isSubmitTimeout(error)) {
+        return {
+            status: 504,
+            body: {
+                error: 'Transaction submission timed out before confirmation. It may still be included in a later ledger.',
+                transactionHash: error?.transactionHash,
+            },
+        };
+    }
+    const resultCodes = error?.response?.data?.extras?.result_codes;
+    if (resultCodes) {
+        return {
+            status: 400,
+            body: {
+                error: 'Transaction failed',
+                transactionCode: resultCodes.transaction,
+                operationCodes: resultCodes.operations,
+            },
+        };
+    }
+    return { status: 500, body: { error: 'An unexpected error occurred' } };
+}
+
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -38,13 +76,23 @@ async function buildAndSubmitWithRetry(server, keypair, buildTransaction, option
 
     let lastError;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        let transaction;
         try {
             const account = await server.loadAccount(keypair.publicKey());
-            const transaction = buildTransaction(account);
+            transaction = buildTransaction(account);
             transaction.sign(keypair);
             return await server.submitTransaction(transaction);
         } catch (error) {
             lastError = error;
+            // Attach the hash of the transaction that failed so a confirmation
+            // timeout can report which transaction may still land in a ledger.
+            if (transaction && error && error.transactionHash === undefined) {
+                try {
+                    error.transactionHash = transaction.hash().toString('hex');
+                } catch {
+                    // transaction.hash() unavailable (e.g. a test double) — skip.
+                }
+            }
             if (!isBadSequenceError(error) || attempt === maxRetries) {
                 break;
             }
@@ -60,4 +108,10 @@ async function buildAndSubmitWithRetry(server, keypair, buildTransaction, option
     throw lastError;
 }
 
-module.exports = { buildAndSubmitWithRetry, SequenceConflictError, isBadSequenceError };
+module.exports = {
+    buildAndSubmitWithRetry,
+    SequenceConflictError,
+    isBadSequenceError,
+    isSubmitTimeout,
+    classicFailureResponse,
+};
