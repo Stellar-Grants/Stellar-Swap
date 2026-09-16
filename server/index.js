@@ -48,5 +48,9 @@ const start = async () => {
     }
 };
 
-checkEnv();
-start();
+if (process.env.NODE_ENV !== 'test') {
+    checkEnv();
+    start();
+}
+
+module.exports = app;
