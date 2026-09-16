@@ -4,9 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "nodemon index.js",
-    "start:prod": "NODE_ENV=production nodemon server.js",
-    "test": "node --test"
+    "start": "node init && nodemon index.js",
+    "start:prod": "node init && NODE_ENV=production nodemon server.js",
+    "test": "node --test",
+    "test:unit": "node --test test/tokenControllers.unit.test.js",
+    "test:integration": "node --test test/tokenControllers.integration.test.js",
+    "test:coverage": "node --test --experimental-test-coverage"
   },
   "author": "",
   "license": "ISC",
@@ -24,6 +27,7 @@
     "node-fetch": "^3.3.2"
   },
   "devDependencies": {
-    "nodemon": "^3.1.4"
+    "nodemon": "^3.1.4",
+    "supertest": "^7.2.2"
   }
 }

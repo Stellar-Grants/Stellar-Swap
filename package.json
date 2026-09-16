@@ -5,7 +5,10 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "npm test --prefix server",
+    "test:unit": "npm run test:unit --prefix server",
+    "test:integration": "npm run test:integration --prefix server",
+    "test:coverage": "npm run test:coverage --prefix server"
   },
   "keywords": [],
   "author": "",

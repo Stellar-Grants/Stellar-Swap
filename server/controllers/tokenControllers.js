@@ -41,6 +41,14 @@ exports.welcomeMsg = async (req, res) => {
     res.status(200).json({ message: "Welcome to Nexus Swap!" });
 };
 
+exports.generateKeyPair = async (req, res) => {
+    const pair = Keypair.random();
+    res.json({
+        publicKey: pair.publicKey(),
+        secretKey: pair.secret(),
+    });
+};
+
 async function fundAccountWithFriendbot(address) {
     const friendbotUrl = `https://friendbot.stellar.org?addr=${address}`;
     try {
@@ -65,6 +73,10 @@ exports.fundAccount = async (req, res) => {
         return res.status(400).json({ error: 'Public key is required' });
     }
 
+    if (!StrKey.isValidEd25519PublicKey(publicKey)) {
+        return res.status(400).json({ error: 'Invalid public key format' });
+    }
+
     const funded = await fundAccountWithFriendbot(publicKey);
 
     if (funded) {
@@ -73,6 +85,11 @@ exports.fundAccount = async (req, res) => {
         res.status(500).json({ error: `Failed to fund account ${publicKey}.` });
     }
 };
+
+exports.parseSlippage = parseSlippage;
+exports.parseHistoryLimit = parseHistoryLimit;
+exports.fundAccountWithFriendbot = fundAccountWithFriendbot;
+
 
 function parseHistoryLimit(limit) {
     const parsedLimit = parseInt(limit, 10);
@@ -280,6 +297,10 @@ exports.withdrawTokens = async (req, res) => {
         return res.status(400).json({ error: 'Slippage must be a number between 0.01 and 50' });
     }
 
+    if (!secretKey || !liquidityPoolId || !amount) {
+        return res.status(400).json({ error: 'secretKey, liquidityPoolId, and amount are required' });
+    }
+
     const server = new Horizon.Server(process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org');
 
     try {
@@ -320,6 +341,11 @@ exports.withdrawTokens = async (req, res) => {
 
 exports.swapTokens = async (req, res) => {
     const { secretKey, destAssetCode, issuerAddress, sendMax, destAmount } = req.body;
+
+    if (!secretKey || !destAssetCode || !issuerAddress || !sendMax || !destAmount) {
+        return res.status(400).json({ error: 'secretKey, destAssetCode, issuerAddress, sendMax, and destAmount are required' });
+    }
+
     const server = new Horizon.Server(process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org');
 
     try {
@@ -464,7 +490,7 @@ exports.getSwapQuote = async (req, res) => {
         validatePositiveAmount(destAmount, 'destAmount'),
     ].filter(Boolean);
     if (errors.length) {
-        return res.status(400).json({ errors });
+        return res.status(400).json({ error: errors.join('; '), errors });
     }
 
     const server = new Horizon.Server(process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org');
