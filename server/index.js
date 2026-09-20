@@ -23,18 +23,69 @@ function checkEnv() {
     console.log('[Config] Environment validated successfully.');
 }
 
+const allowedOrigins = (process.env.CORS_ORIGIN || "http://localhost:3000")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
 const corsOptions = {
-    origin: '*',
-    methods: 'GET, POST, PUT, DELETE, OPTIONS',
-    allowedHeaders: 'Content-Type, Authorization',
+    origin(origin, callback) {
+        // Origin-less requests are non-browser clients such as curl, Postman,
+        // health checks, and server-to-server integrations.
+        if (!origin || allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+
+        return callback(new Error(`CORS policy: origin ${origin} is not allowed.`), false);
+    },
+    methods: ["GET", "POST"],
+    allowedHeaders: ["Content-Type"],
+    credentials: false,
 };
 
-app.use(morgan("dev"));
-app.use(cors(corsOptions));
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.disable("x-powered-by");
 
-app.use('/', tokenRoute);
+// Security headers must be the first registered middleware so every route,
+// including error responses from later middleware, receives the same baseline.
+app.use(helmet({
+    hsts: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true,
+    },
+    frameguard: { action: "deny" },
+    noSniff: true,
+    hidePoweredBy: true,
+    referrerPolicy: { policy: "no-referrer" },
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'none'"],
+            frameAncestors: ["'none'"],
+            baseUri: ["'none'"],
+            formAction: ["'none'"],
+        },
+    },
+}));
+
+// This API handles key and transaction material. Responses should never be
+// retained by browsers, shared proxies, or CDNs, even when a sensitive route
+// is renamed or moved.
+app.use((_req, res, next) => {
+    res.set({
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    });
+    next();
+});
+
+app.use(cors(corsOptions));
+app.use(morgan("dev"));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
+
+app.use("/", tokenRoute);
 
 const port = process.env.PORT || 8000;
 
