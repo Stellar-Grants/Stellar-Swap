@@ -75,3 +75,9 @@ npm run dev
 ## 👨‍💻 Author
 
 **Made by Abhinav**
+
+---
+
+## ⚠️ Known Issues
+
+- **Empty `path` in `pathPaymentStrictReceive`**: When `path` is `[]` or omitted, the operation only attempts a direct exchange between `sendAsset` and `destAsset`. If no direct AMM pool or order book offer exists, it fails with `PATH_PAYMENT_STRICT_RECEIVE_TOO_FEW_OFFERS`. Ensure intermediate assets are included in the `path` parameter for non-direct asset pairs. See [#50](https://github.com/Stellar-Grants/Stellar-Swap/issues/50).
