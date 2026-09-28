@@ -11,6 +11,7 @@ const {
     Networks
 } = require('@stellar/stellar-sdk');
 const { buildAndSubmitWithRetry, isSubmitTimeout, classicFailureResponse } = require('../utils/stellarTx');
+const stellarConfig = require('../lib/stellarConfig');
 
 
 // Parse and validate a user-provided slippage tolerance (in percent).
@@ -42,7 +43,10 @@ exports.welcomeMsg = async (req, res) => {
 };
 
 async function fundAccountWithFriendbot(address) {
-    const friendbotUrl = `https://friendbot.stellar.org?addr=${address}`;
+    if (!stellarConfig.friendbotUrl) {
+        throw new Error('Friendbot is not available on mainnet. Fund the account manually.');
+    }
+    const friendbotUrl = `${stellarConfig.friendbotUrl}?addr=${address}`;
     try {
         let response = await fetch(friendbotUrl);
         if (response.ok) {
@@ -176,7 +180,7 @@ exports.getAccountHistory = async (req, res) => {
     }
 
     const parsedLimit = parseHistoryLimit(limit);
-    const server = new Horizon.Server(process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org');
+    const server = new Horizon.Server(stellarConfig.horizonUrl);
 
     try {
         let query = server
@@ -221,7 +225,7 @@ exports.depositTokens = async (req, res) => {
         return res.status(400).json({ error: 'amountA and amountB must be positive numbers' });
     }
 
-    const server = new Horizon.Server(process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org');
+    const server = new Horizon.Server(stellarConfig.horizonUrl);
 
     try {
         const keypair = Keypair.fromSecret(secretKey);
@@ -241,7 +245,7 @@ exports.depositTokens = async (req, res) => {
         const result = await buildAndSubmitWithRetry(server, keypair, (account) =>
             new TransactionBuilder(account, {
                 fee: recommendedFee,
-                networkPassphrase: Networks.TESTNET
+                networkPassphrase: stellarConfig.networkPassphrase
             })
                 .addOperation(Operation.changeTrust({
                     asset: liquidityPoolAsset
@@ -280,7 +284,7 @@ exports.withdrawTokens = async (req, res) => {
         return res.status(400).json({ error: 'Slippage must be a number between 0.01 and 50' });
     }
 
-    const server = new Horizon.Server(process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org');
+    const server = new Horizon.Server(stellarConfig.horizonUrl);
 
     try {
         const keypair = Keypair.fromSecret(secretKey);
@@ -290,7 +294,7 @@ exports.withdrawTokens = async (req, res) => {
         const result = await buildAndSubmitWithRetry(server, keypair, (account) =>
             new TransactionBuilder(account, {
                 fee: recommendedFee,
-                networkPassphrase: Networks.TESTNET
+                networkPassphrase: stellarConfig.networkPassphrase
             })
                 .addOperation(Operation.liquidityPoolWithdraw({
                     liquidityPoolId: liquidityPoolId,
@@ -320,7 +324,7 @@ exports.withdrawTokens = async (req, res) => {
 
 exports.swapTokens = async (req, res) => {
     const { secretKey, destAssetCode, issuerAddress, sendMax, destAmount } = req.body;
-    const server = new Horizon.Server(process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org');
+    const server = new Horizon.Server(stellarConfig.horizonUrl);
 
     try {
         const keypair = Keypair.fromSecret(secretKey);
@@ -331,7 +335,7 @@ exports.swapTokens = async (req, res) => {
         const result = await buildAndSubmitWithRetry(server, keypair, (account) =>
             new TransactionBuilder(account, {
                 fee: recommendedFee,
-                networkPassphrase: Networks.TESTNET
+                networkPassphrase: stellarConfig.networkPassphrase
             })
                 .addOperation(Operation.changeTrust({
                     asset: destAsset,
@@ -375,12 +379,12 @@ exports.feeBumpTransaction = async (req, res) => {
         return res.status(400).json({ error: 'innerTxXdr and feeAccountSecret are required' });
     }
 
-    const server = new Horizon.Server(process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org');
+    const server = new Horizon.Server(stellarConfig.horizonUrl);
     let txHash;
 
     try {
         const feeKeypair = Keypair.fromSecret(feeAccountSecret);
-        const innerTx = TransactionBuilder.fromXDR(innerTxXdr, Networks.TESTNET);
+        const innerTx = TransactionBuilder.fromXDR(innerTxXdr, stellarConfig.networkPassphrase);
 
         const recommendedFee = await getRecommendedFee(server);
         const feeBumpFee = (parseInt(recommendedFee, 10) * 10).toString();
@@ -389,7 +393,7 @@ exports.feeBumpTransaction = async (req, res) => {
             feeKeypair,
             feeBumpFee,
             innerTx,
-            Networks.TESTNET
+            stellarConfig.networkPassphrase
         );
 
         txHash = feeBumpTx.hash().toString('hex');
@@ -429,7 +433,7 @@ exports.getAccountInfo = async (req, res) => {
         return res.status(400).json({ error: 'Invalid public key format' });
     }
 
-    const server = new Horizon.Server(process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org');
+    const server = new Horizon.Server(stellarConfig.horizonUrl);
 
     try {
         const account = await server.loadAccount(publicKey);
@@ -467,7 +471,7 @@ exports.getSwapQuote = async (req, res) => {
         return res.status(400).json({ errors });
     }
 
-    const server = new Horizon.Server(process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org');
+    const server = new Horizon.Server(stellarConfig.horizonUrl);
     const destAsset = new Asset(destAssetCode, issuerAddress);
 
     try {
